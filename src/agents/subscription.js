@@ -9,6 +9,7 @@ const PLAN_MAP = {
 };
 
 const PLAN_PRICE = { premium: 97, basico: 49 };
+const PIX_KEY = 'financeiro@fitmomentum.com.br';
 
 class SubscriptionAgent {
   async presentPlans(phone) {
@@ -42,7 +43,14 @@ class SubscriptionAgent {
   }
 
   async processPlanChoice(user, buttonId) {
-    const plano = PLAN_MAP[buttonId] || buttonId;
+    const plano = PLAN_MAP[buttonId];
+
+    if (!plano) {
+      logger.info(`[Subscription] Escolha inválida '${buttonId}' por user ${user.id}`);
+      await messageSender.sendText(user.phone, 'Não entendi 🤔 Escolha um dos planos abaixo:');
+      return await this.presentPlans(user.phone);
+    }
+
     logger.info(`[Subscription] Plano '${plano}' escolhido por user ${user.id}`);
 
     if (plano === 'teste') {
@@ -66,18 +74,63 @@ class SubscriptionAgent {
       return;
     }
 
-    const valor = PLAN_PRICE[plano] || 0;
+    const valor = PLAN_PRICE[plano];
 
     await db.query(
-      'UPDATE users SET plano = $1, status_pagamento = $2 WHERE id = $3',
-      [plano, 'pending', user.id]
+      `UPDATE users SET plano = $1, status_pagamento = $2, conversation_state = $3 WHERE id = $4`,
+      [plano, 'pending', 'pending_payment', user.id]
     );
 
     await messageSender.sendText(user.phone,
       `✅ *Plano ${plano.toUpperCase()} selecionado!*\n\n` +
       `💰 Valor: *R$ ${valor}/mês*\n\n` +
-      `📲 Realize o PIX para a chave:\n*financeiro@fitmomentum.com.br*\n\n` +
+      `📲 Realize o PIX para a chave:\n*${PIX_KEY}*\n\n` +
       `Após o pagamento, envie o comprovante aqui para liberarmos seu acesso! 🚀`
+    );
+  }
+
+  /**
+   * Trata mensagens recebidas enquanto o usuário está em `pending_payment`.
+   */
+  async handlePendingPayment(user, content, messageType) {
+    if (messageType === 'image' || messageType === 'document') {
+      return await this._receivePaymentProof(user, content);
+    }
+
+    const valor = PLAN_PRICE[user.plano] || 0;
+    await messageSender.sendText(user.phone,
+      `⏳ Ainda aguardando a confirmação do seu pagamento.\n\n` +
+      `📲 Chave PIX: *${PIX_KEY}*\n` +
+      `💰 Valor: *R$ ${valor}/mês*\n\n` +
+      `Assim que enviar o comprovante (foto ou PDF), vou avisar o time e liberar seu acesso. 🚀`
+    );
+  }
+
+  async _receivePaymentProof(user, mediaId) {
+    const valor = PLAN_PRICE[user.plano] || 0;
+
+    await db.query(
+      `INSERT INTO payments (user_id, plano, valor, status, provider, provider_id)
+       VALUES ($1, $2, $3, 'pending', 'pix_manual', $4)`,
+      [user.id, user.plano, valor, mediaId]
+    );
+
+    await messageSender.sendText(user.phone,
+      '📄 Comprovante recebido! Vamos confirmar o pagamento e liberar seu acesso em breve. ✅'
+    );
+
+    if (!process.env.ADMIN_PHONE) {
+      logger.warn('[Subscription] ADMIN_PHONE não configurado — notificação de comprovante não enviada');
+      return;
+    }
+
+    await messageSender.sendText(process.env.ADMIN_PHONE,
+      `💰 *Novo comprovante recebido*\n\n` +
+      `👤 Nome: ${user.nome || 'N/A'}\n` +
+      `📱 Telefone: ${user.phone}\n` +
+      `📦 Plano: ${user.plano}\n` +
+      `💵 Valor: R$ ${valor}/mês\n\n` +
+      `Libere o acesso: POST /api/users/${user.id}/activate`
     );
   }
 

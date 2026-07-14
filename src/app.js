@@ -4,6 +4,7 @@ const logger = require('./utils/logger');
 const webhookRoutes = require('./routes/webhook');
 const apiRoutes = require('./routes/api');
 const errorHandler = require('./middleware/errorHandler');
+const apiAuth = require('./middleware/apiAuth');
 const { initCronJobs } = require('./jobs');
 
 const app = express();
@@ -21,7 +22,7 @@ app.use((req, res, next) => {
 
 // Rotas
 app.use('/webhook', webhookRoutes);
-app.use('/api', apiRoutes);
+app.use('/api', apiAuth, apiRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

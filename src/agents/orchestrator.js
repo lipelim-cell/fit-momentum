@@ -42,6 +42,10 @@ class OrchestratorAgent {
         return await onboardingAgent.handle(user, message, messageType);
       }
 
+      if (user.conversation_state === 'pending_payment') {
+        return await subscriptionAgent.handlePendingPayment(user, message, messageType);
+      }
+
       if (user.conversation_state === 'active') {
         return await this._handleActive(user, message);
       }

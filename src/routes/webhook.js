@@ -54,6 +54,8 @@ router.post('/whatsapp', async (req, res) => {
             } else if (interactive.type === 'list_reply') {
               content = interactive.list_reply.id;
             }
+          } else if (message.type === 'image' || message.type === 'document') {
+            content = message.image?.id || message.document?.id;
           } else {
             logger.info(`Tipo de mensagem não suportado: ${message.type}`);
             continue;
