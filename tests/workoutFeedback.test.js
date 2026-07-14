@@ -93,4 +93,18 @@ describe('WorkoutAgent.handleFeedback', () => {
     expect(mockAdaptIntensity).not.toHaveBeenCalled();
     expect(mockSendText).not.toHaveBeenCalled();
   });
+
+  it('feedback_nao_fiz grava o feedback sem marcar conclusão e sem mexer na intensidade', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [] }); // UPDATE workouts (só feedback)
+
+    await workoutAgent.handleFeedback(user, 'feedback_nao_fiz');
+
+    expect(mockAdaptIntensity).not.toHaveBeenCalled();
+    expect(mockQuery).toHaveBeenCalledTimes(1);
+    const [sql, params] = mockQuery.mock.calls[0];
+    expect(sql).toContain('UPDATE workouts');
+    expect(sql).not.toContain('completado = true');
+    expect(params).toEqual(['nao_fiz', user.id]);
+    expect(mockSendText).toHaveBeenCalledWith(user.phone, expect.stringContaining('Tudo bem'));
+  });
 });

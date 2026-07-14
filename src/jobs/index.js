@@ -68,8 +68,13 @@ async function collectFeedback() {
 
     for (const user of result.rows) {
       try {
-        await messageSender.sendText(user.phone,
-          `Oi, *${user.nome}*! 👋\n\nVocê conseguiu fazer o treino de hoje?\n\nSeu feedback nos ajuda a melhorar cada treino! 💪`
+        await messageSender.sendInteractiveButtons(user.phone,
+          `Oi, *${user.nome}*! 👋 Como foi o treino de hoje?`,
+          [
+            { id: 'feedback_ideal', title: '✅ Fiz, foi ideal' },
+            { id: 'feedback_dificil', title: '😰 Fiz, foi difícil' },
+            { id: 'feedback_nao_fiz', title: '❌ Não consegui' },
+          ]
         );
       } catch (err) {
         logger.error(`Erro ao coletar feedback de ${user.phone}:`, err.message);

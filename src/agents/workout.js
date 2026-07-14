@@ -9,6 +9,7 @@ const FEEDBACK_MAP = {
   'feedback_dificil': 'dificil',
   'feedback_muito_facil': 'muito_facil',
   'feedback_muito_dificil': 'muito_dificil',
+  'feedback_nao_fiz': 'nao_fiz',
 };
 
 const FEEDBACK_REPLY = {
@@ -17,6 +18,7 @@ const FEEDBACK_REPLY = {
   dificil: '📉 Entendido! Vou reduzir a intensidade para você se adaptar melhor.',
   muito_facil: '🚀 Excelente! Você está evoluindo muito! Aumentando bastante a intensidade.',
   muito_dificil: '🙏 Tudo bem! Descanse bem hoje. Vou reduzir bastante a intensidade.',
+  nao_fiz: 'Tudo bem, acontece! Amanhã tem treino novo te esperando 💪',
 };
 
 class WorkoutAgent {
@@ -61,6 +63,16 @@ class WorkoutAgent {
     }
 
     logger.info(`[Workout] Feedback '${feedback}' de user ${user.id}`);
+
+    if (feedback === 'nao_fiz') {
+      await db.query(
+        `UPDATE workouts SET feedback = $1, updated_at = NOW()
+         WHERE user_id = $2 AND data = CURRENT_DATE`,
+        [feedback, user.id]
+      );
+      await messageSender.sendText(user.phone, FEEDBACK_REPLY[feedback]);
+      return;
+    }
 
     await workoutGenerator.adaptIntensity(user.id, feedback);
 

@@ -81,15 +81,10 @@ class MessageSender {
       `*🔥 AQUECIMENTO:*\n${workout.aquecimento}\n\n` +
       `*💪 EXERCÍCIOS:*\n\n${exerciciosTexto}\n\n` +
       `*🧘 ALONGAMENTO:*\n${workout.alongamento}\n\n` +
-      `*📝 OBSERVAÇÕES:*\n${workout.observacoes}`;
+      `*📝 OBSERVAÇÕES:*\n${workout.observacoes}\n\n` +
+      `Quando terminar, é só me contar como foi! 💪 (vou te perguntar à noite também)`;
 
     await this.sendText(to, mensagem);
-
-    await this.sendInteractiveButtons(to, 'Como foi o treino de hoje?', [
-      { id: 'feedback_ideal', title: '✅ Ideal' },
-      { id: 'feedback_facil', title: '😊 Fácil' },
-      { id: 'feedback_dificil', title: '😰 Difícil' },
-    ]);
   }
 
   _delay() {
