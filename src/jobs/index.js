@@ -25,6 +25,9 @@ function initCronJobs() {
   // Verificação de assinaturas vencidas (todo dia à meia-noite)
   cron.schedule('0 0 * * *', checkExpiredSubscriptions, { timezone: 'America/Sao_Paulo' });
 
+  // Limpeza de mensagens processadas antigas (todo dia à meia-noite)
+  cron.schedule('0 0 * * *', cleanupProcessedMessages, { timezone: 'America/Sao_Paulo' });
+
   // Reengajamento de inativos (toda segunda às 9h)
   cron.schedule('0 9 * * 1', reengageInactiveUsers, { timezone: 'America/Sao_Paulo' });
 }
@@ -112,6 +115,19 @@ async function checkExpiredSubscriptions() {
     logger.info(`✅ ${result.rowCount} assinaturas marcadas como vencidas`);
   } catch (error) {
     logger.error('Erro no job de assinaturas:', error);
+  }
+}
+
+async function cleanupProcessedMessages() {
+  logger.info('🧹 Limpando mensagens processadas antigas...');
+
+  try {
+    const result = await db.query(
+      `DELETE FROM processed_messages WHERE processed_at < NOW() - INTERVAL '7 days'`
+    );
+    logger.info(`✅ ${result.rowCount} registros de deduplicação removidos`);
+  } catch (error) {
+    logger.error('Erro no job de limpeza de mensagens processadas:', error);
   }
 }
 

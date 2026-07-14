@@ -73,6 +73,15 @@ const migrations = [
       CREATE INDEX IF NOT EXISTS idx_payments_user ON payments(user_id);
     `,
   },
+  {
+    name: 'create_processed_messages',
+    sql: `
+      CREATE TABLE IF NOT EXISTS processed_messages (
+        message_id    VARCHAR(255) PRIMARY KEY,
+        processed_at  TIMESTAMP DEFAULT NOW()
+      );
+    `,
+  },
 ];
 
 async function migrate() {
