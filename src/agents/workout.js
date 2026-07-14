@@ -21,6 +21,19 @@ const FEEDBACK_REPLY = {
 
 class WorkoutAgent {
   async sendTodaysWorkout(user) {
+    const existing = await db.query(
+      'SELECT exercicios FROM workouts WHERE user_id = $1 AND data = CURRENT_DATE',
+      [user.id]
+    );
+
+    if (existing.rows.length > 0) {
+      logger.info(`[Workout] Reenviando treino já existente para user ${user.id}`);
+      const workout = existing.rows[0].exercicios;
+      await messageSender.sendText(user.phone, '🔁 Reenviando seu treino de hoje:');
+      await messageSender.sendWorkout(user.phone, workout);
+      return;
+    }
+
     logger.info(`[Workout] Gerando treino para user ${user.id}`);
 
     await messageSender.sendText(user.phone,
