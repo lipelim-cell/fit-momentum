@@ -1,53 +1,78 @@
-const Anthropic = require('@anthropic-ai/sdk');
+const Joi = require('joi');
 const logger = require('../../utils/logger');
+const anthropicProvider = require('./providers/anthropicProvider');
+const deepseekProvider = require('./providers/deepseekProvider');
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY
-});
+const PROVIDERS = {
+  anthropic: anthropicProvider,
+  deepseek: deepseekProvider,
+};
 
 const SYSTEM_PROMPT = `Você é um Personal Trainer experiente e certificado do sistema FIT MOMENTUM.
 Seu papel é criar treinos completos, seguros e personalizados com base no perfil do aluno.
 Sempre responda APENAS com JSON válido, sem markdown, sem texto adicional antes ou depois.`;
 
+const workoutSchema = Joi.object({
+  titulo: Joi.string().required(),
+  exercicios: Joi.array()
+    .min(3)
+    .items(
+      Joi.object({
+        nome: Joi.string().required(),
+        series: Joi.alternatives(Joi.string(), Joi.number()).required(),
+        repeticoes: Joi.alternatives(Joi.string(), Joi.number()).required(),
+      }).unknown(true)
+    )
+    .required(),
+}).unknown(true);
+
+function getModelName(providerName) {
+  return providerName === 'deepseek'
+    ? (process.env.DEEPSEEK_MODEL || 'deepseek-chat')
+    : (process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6');
+}
+
 class WorkoutGenerator {
 
   async generatePersonalizedWorkout(userProfile) {
+    const providerName = process.env.AI_PROVIDER || 'anthropic';
+
     try {
       logger.info(`[WorkoutGenerator] Gerando treino para user ${userProfile.id}`);
 
-      const message = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 3000,
-        system: [
-          {
-            type: 'text',
-            text: SYSTEM_PROMPT,
-            cache_control: { type: 'ephemeral' },
-          }
-        ],
-        messages: [{
-          role: 'user',
-          content: this.buildPrompt(userProfile),
-        }],
-      });
-      
-      const responseText = message.content[0].text;
-      
+      const provider = PROVIDERS[providerName];
+      if (!provider) {
+        throw new Error(`AI_PROVIDER desconhecido: ${providerName}`);
+      }
+      if (providerName === 'deepseek' && !process.env.DEEPSEEK_API_KEY) {
+        throw new Error('DEEPSEEK_API_KEY não configurada');
+      }
+
+      logger.info(`[WorkoutGenerator] provider=${providerName} model=${getModelName(providerName)}`);
+
+      const responseText = await provider.generate(SYSTEM_PROMPT, this.buildPrompt(userProfile));
+
       // Limpar markdown (```json) se presente
       const cleanedText = responseText
         .replace(/```json\n/g, '')
         .replace(/```\n/g, '')
         .replace(/```/g, '')
         .trim();
-      
+
       const workoutData = JSON.parse(cleanedText);
-      
+
+      const { error } = workoutSchema.validate(workoutData);
+      if (error) {
+        logger.debug(`[WorkoutGenerator] JSON inválido (${error.message}): ${cleanedText}`);
+        throw new Error(`Treino gerado é inválido: ${error.message}`);
+      }
+
       logger.info(`[WorkoutGenerator] Treino gerado: ${workoutData.titulo}`);
       return workoutData;
 
     } catch (error) {
       logger.error('[WorkoutGenerator] Erro ao gerar treino:', error);
-      
+
       // Fallback: retornar treino básico em caso de erro
       return this.getFallbackWorkout(userProfile);
     }
