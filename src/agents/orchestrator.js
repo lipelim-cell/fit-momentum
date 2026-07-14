@@ -5,8 +5,12 @@ const maskPhone = require('../utils/maskPhone');
 
 const ONBOARDING_STATES = new Set([
   'new', 'awaiting_name', 'awaiting_objective',
-  'awaiting_level', 'awaiting_location', 'awaiting_frequency', 'awaiting_plan_choice'
+  'awaiting_level', 'awaiting_location', 'awaiting_frequency',
+  'awaiting_restrictions', 'awaiting_restrictions_text', 'awaiting_plan_choice'
 ]);
+
+const GREETINGS = ['oi', 'oii', 'ola', 'olá', 'bom dia', 'boa tarde', 'boa noite', 'opa', 'eae', 'e ai', 'e aí'];
+const THANKS = ['obrigad', 'valeu', 'vlw', 'thanks'];
 
 class OrchestratorAgent {
   async handle(phoneNumber, message, messageType = 'text') {
@@ -73,13 +77,29 @@ class OrchestratorAgent {
     const workoutAgent = require('./workout');
     const progressAgent = require('./progress');
 
-    const msg = message.toLowerCase();
+    const msg = message.toLowerCase().trim();
 
     if (msg.includes('treino')) return await workoutAgent.sendTodaysWorkout(user);
     if (msg.includes('progresso')) return await progressAgent.sendReport(user);
 
     // Feedback de treino vem como button_reply id
     if (message.startsWith('feedback_')) return await workoutAgent.handleFeedback(user, message);
+
+    if (GREETINGS.some(g => msg === g || msg.startsWith(`${g} `))) {
+      return await messageSender.sendText(user.phone,
+        `Oi, *${user.nome}*! 👋\n\nDigite *TREINO*, *PROGRESSO* ou *AJUDA*.`
+      );
+    }
+
+    if (THANKS.some(t => msg.includes(t))) {
+      return await messageSender.sendText(user.phone, 'Tamo junto! 💪');
+    }
+
+    if (msg.includes('?')) {
+      return await messageSender.sendText(user.phone,
+        `Boa pergunta! Digite *AJUDA* para ver todos os comandos que eu entendo. 😊`
+      );
+    }
 
     await messageSender.sendText(user.phone,
       `Olá, *${user.nome}*! 👋\n\n` +

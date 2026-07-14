@@ -2,7 +2,8 @@ const axios = require('axios');
 const logger = require('../../utils/logger');
 const maskPhone = require('../../utils/maskPhone');
 
-const DELAY_MS = parseInt(process.env.MESSAGE_DELAY_MS) || 2000;
+const parsedDelay = parseInt(process.env.MESSAGE_DELAY_MS, 10);
+const DELAY_MS = Number.isNaN(parsedDelay) ? 2000 : parsedDelay;
 
 class MessageSender {
   constructor() {
@@ -65,7 +66,41 @@ class MessageSender {
     await this._delay();
   }
 
+  async sendInteractiveList(to, bodyText, buttonLabel, rows) {
+    const payload = {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to,
+      type: 'interactive',
+      interactive: {
+        type: 'list',
+        body: { text: bodyText },
+        action: {
+          button: buttonLabel.slice(0, 20),
+          sections: [
+            {
+              rows: rows.slice(0, 10).map(row => ({
+                id: row.id,
+                title: row.title.slice(0, 24),
+                ...(row.description ? { description: row.description.slice(0, 72) } : {}),
+              })),
+            },
+          ],
+        },
+      },
+    };
+    await this._send(payload);
+    await this._delay();
+  }
+
   async sendWorkout(to, workout) {
+    const cabecalho =
+      `🏋️ *${workout.titulo}*\n\n` +
+      `⏱️ Duração: ${workout.duracao_estimada}\n` +
+      `🔥 Calorias: ~${workout.calorias_estimadas} kcal\n` +
+      `📈 Dificuldade: ${workout.dificuldade}\n\n` +
+      `*🔥 AQUECIMENTO:*\n${workout.aquecimento}`;
+
     const exerciciosTexto = workout.exercicios
       .map((ex, i) =>
         `*${i + 1}. ${ex.nome}*\n` +
@@ -75,18 +110,14 @@ class MessageSender {
       )
       .join('\n\n');
 
-    const mensagem =
-      `🏋️ *${workout.titulo}*\n\n` +
-      `⏱️ Duração: ${workout.duracao_estimada}\n` +
-      `🔥 Calorias: ~${workout.calorias_estimadas} kcal\n` +
-      `📈 Dificuldade: ${workout.dificuldade}\n\n` +
-      `*🔥 AQUECIMENTO:*\n${workout.aquecimento}\n\n` +
-      `*💪 EXERCÍCIOS:*\n\n${exerciciosTexto}\n\n` +
+    const fechamento =
       `*🧘 ALONGAMENTO:*\n${workout.alongamento}\n\n` +
       `*📝 OBSERVAÇÕES:*\n${workout.observacoes}\n\n` +
       `Quando terminar, é só me contar como foi! 💪 (vou te perguntar à noite também)`;
 
-    await this.sendText(to, mensagem);
+    await this.sendText(to, cabecalho);
+    await this.sendText(to, `*💪 EXERCÍCIOS:*\n\n${exerciciosTexto}`);
+    await this.sendText(to, fechamento);
   }
 
   _delay() {

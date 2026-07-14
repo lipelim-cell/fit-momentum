@@ -36,6 +36,8 @@ class OnboardingAgent {
       case 'awaiting_level':  return await this._collectLevel(user, message);
       case 'awaiting_location': return await this._collectLocation(user, message);
       case 'awaiting_frequency': return await this._collectFrequency(user, message);
+      case 'awaiting_restrictions': return await this._collectRestrictions(user, message);
+      case 'awaiting_restrictions_text': return await this._collectRestrictionsText(user, message);
       case 'awaiting_plan_choice': {
         const subscriptionAgent = require('./subscription');
         return await subscriptionAgent.processPlanChoice(user, message);
@@ -59,8 +61,9 @@ class OnboardingAgent {
     const trimmed = name.trim();
     await db.query('UPDATE users SET nome = $1 WHERE id = $2', [trimmed, user.id]);
 
-    await messageSender.sendInteractiveButtons(user.phone,
+    await messageSender.sendInteractiveList(user.phone,
       `Prazer, *${trimmed}*! 😊\n\nQual seu principal *objetivo*?`,
+      'Escolher',
       [
         { id: 'obj_perder', title: '🔵 Perder peso' },
         { id: 'obj_ganhar', title: '💪 Ganhar massa' },
@@ -105,8 +108,9 @@ class OnboardingAgent {
     const local = LOCATION_MAP[buttonId] || buttonId;
     await db.query('UPDATE users SET local_treino = $1 WHERE id = $2', [local, user.id]);
 
-    await messageSender.sendInteractiveButtons(user.phone,
+    await messageSender.sendInteractiveList(user.phone,
       'Quantos dias por semana você consegue *treinar*?',
+      'Escolher',
       [
         { id: 'freq_3', title: '3️⃣ dias' },
         { id: 'freq_4', title: '4️⃣ dias' },
@@ -121,9 +125,40 @@ class OnboardingAgent {
     const dias = FREQUENCY_MAP[buttonId] || parseInt(buttonId) || 3;
     await db.query('UPDATE users SET dias_semana = $1 WHERE id = $2', [dias, user.id]);
 
+    await messageSender.sendInteractiveButtons(user.phone,
+      '🩺 Alguma *restrição ou lesão* que eu deva saber para montar seu treino com segurança?',
+      [
+        { id: 'restr_nao', title: '✅ Nenhuma' },
+        { id: 'restr_sim', title: '⚠️ Tenho sim' },
+      ]
+    );
+    await this._setState(user.id, 'awaiting_restrictions');
+  }
+
+  async _collectRestrictions(user, buttonId) {
+    if (buttonId === 'restr_sim') {
+      await messageSender.sendText(user.phone,
+        'Me conta quais: lesões, dores, cirurgias recentes...'
+      );
+      await this._setState(user.id, 'awaiting_restrictions_text');
+      return;
+    }
+
+    await db.query('UPDATE users SET restricoes = NULL WHERE id = $1', [user.id]);
+    await this._finishOnboarding(user);
+  }
+
+  async _collectRestrictionsText(user, text) {
+    await db.query('UPDATE users SET restricoes = $1 WHERE id = $2', [text.trim(), user.id]);
+    await this._finishOnboarding(user);
+  }
+
+  async _finishOnboarding(user) {
     // Buscar dados completos para exibir resumo
     const { rows } = await db.query('SELECT * FROM users WHERE id = $1', [user.id]);
     const u = rows[0];
+
+    const restricoesLinha = u.restricoes ? `⚠️ Restrições: *${u.restricoes}*\n` : '';
 
     await messageSender.sendText(user.phone,
       `✅ *Perfeito, ${u.nome}!*\n\n` +
@@ -131,11 +166,24 @@ class OnboardingAgent {
       `🎯 Objetivo: *${u.objetivo}*\n` +
       `📈 Nível: *${u.nivel}*\n` +
       `📍 Local: *${u.local_treino}*\n` +
-      `📅 Frequência: *${u.dias_semana}x por semana*\n\n` +
-      `Agora vou te mostrar os planos disponíveis! 💪`
+      `📅 Frequência: *${u.dias_semana}x por semana*\n` +
+      restricoesLinha
     );
 
     await new Promise(r => setTimeout(r, 1500));
+
+    const workoutAgent = require('./workout');
+    try {
+      await workoutAgent.sendTodaysWorkout(u, {
+        introText: '🎁 Preparei um treino de degustação pra você, com base no seu perfil:\n\n⚡ Aguarde alguns segundos!'
+      });
+    } catch (error) {
+      logger.error(`[Onboarding] Erro ao gerar treino de degustação para user ${u.id}:`, error);
+    }
+
+    await messageSender.sendText(user.phone,
+      'Gostou? Isso é o que você recebe todo dia às 6h. Veja os planos:'
+    );
 
     const subscriptionAgent = require('./subscription');
     await subscriptionAgent.presentPlans(user.phone);

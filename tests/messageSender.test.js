@@ -32,13 +32,48 @@ describe('MessageSender.sendWorkout', () => {
     axios.post.mockResolvedValue({ data: {} });
   });
 
-  it('envia apenas a mensagem de texto do treino, sem botões de feedback', async () => {
+  it('envia o treino em 3 mensagens sequenciais, sem botões de feedback', async () => {
     await messageSender.sendWorkout('5511999990001', workout);
+
+    expect(axios.post).toHaveBeenCalledTimes(3);
+
+    const bodies = axios.post.mock.calls.map(([, payload]) => {
+      expect(payload.type).toBe('text');
+      return payload.text.body;
+    });
+
+    expect(bodies[0]).toContain(workout.titulo);
+    expect(bodies[0]).toContain('AQUECIMENTO');
+    expect(bodies[1]).toContain('EXERCÍCIOS');
+    expect(bodies[1]).toContain('Agachamento');
+    expect(bodies[2]).toContain('ALONGAMENTO');
+    expect(bodies[2]).toContain('Quando terminar, é só me contar como foi');
+    expect(bodies.join('\n')).not.toContain('Como foi o treino de hoje?');
+  });
+});
+
+describe('MessageSender.sendInteractiveList', () => {
+  beforeEach(() => {
+    axios.post.mockReset();
+    axios.post.mockResolvedValue({ data: {} });
+  });
+
+  it('envia todas as linhas (até 10) como list message, sem cortar em 3', async () => {
+    const rows = [
+      { id: 'obj_perder', title: '🔵 Perder peso' },
+      { id: 'obj_ganhar', title: '💪 Ganhar massa' },
+      { id: 'obj_definir', title: '⚡ Definição' },
+      { id: 'obj_saude', title: '❤️ Saúde geral' },
+    ];
+
+    await messageSender.sendInteractiveList('5511999990001', 'Qual seu objetivo?', 'Escolher', rows);
 
     expect(axios.post).toHaveBeenCalledTimes(1);
     const [, payload] = axios.post.mock.calls[0];
-    expect(payload.type).toBe('text');
-    expect(payload.text.body).toContain('Quando terminar, é só me contar como foi');
-    expect(payload.text.body).not.toContain('Como foi o treino de hoje?');
+    expect(payload.interactive.type).toBe('list');
+    expect(payload.interactive.action.sections[0].rows).toHaveLength(4);
+    expect(payload.interactive.action.sections[0].rows.map(r => r.id)).toEqual(
+      rows.map(r => r.id)
+    );
   });
 });

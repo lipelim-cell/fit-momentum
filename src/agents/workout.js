@@ -22,7 +22,7 @@ const FEEDBACK_REPLY = {
 };
 
 class WorkoutAgent {
-  async sendTodaysWorkout(user) {
+  async sendTodaysWorkout(user, { introText } = {}) {
     const existing = await db.query(
       'SELECT exercicios FROM workouts WHERE user_id = $1 AND data = CURRENT_DATE',
       [user.id]
@@ -39,7 +39,7 @@ class WorkoutAgent {
     logger.info(`[Workout] Gerando treino para user ${user.id}`);
 
     await messageSender.sendText(user.phone,
-      '⚡ Gerando seu treino personalizado...\n\nAguarde alguns segundos! 🤖'
+      introText || '⚡ Gerando seu treino personalizado...\n\nAguarde alguns segundos! 🤖'
     );
 
     const workout = await workoutGenerator.generatePersonalizedWorkout(user);
