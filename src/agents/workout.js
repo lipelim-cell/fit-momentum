@@ -63,7 +63,44 @@ class WorkoutAgent {
     logger.info(`[Workout] Feedback '${feedback}' de user ${user.id}`);
 
     await workoutGenerator.adaptIntensity(user.id, feedback);
-    await messageSender.sendText(user.phone, FEEDBACK_REPLY[feedback]);
+
+    // CTE captura o valor de `completado` anterior ao UPDATE, na mesma transação —
+    // evita duas leituras separadas (race condition se dois feedbacks chegarem juntos).
+    const updateResult = await db.query(
+      `WITH old AS (
+         SELECT completado FROM workouts WHERE user_id = $2 AND data = CURRENT_DATE
+       )
+       UPDATE workouts
+       SET completado = true, feedback = $1, updated_at = NOW()
+       WHERE user_id = $2 AND data = CURRENT_DATE
+       RETURNING (SELECT completado FROM old) AS was_completed`,
+      [feedback, user.id]
+    );
+
+    let streakMsg = '';
+
+    if (updateResult.rows.length > 0 && updateResult.rows[0].was_completed !== true) {
+      const { rows } = await db.query(
+        `SELECT (MAX(data) = CURRENT_DATE - 1) AS foi_ontem
+         FROM workouts
+         WHERE user_id = $1 AND completado = true AND data < CURRENT_DATE`,
+        [user.id]
+      );
+
+      const foiOntem = rows[0]?.foi_ontem === true;
+      const streak = foiOntem ? (parseInt(user.current_streak) || 0) + 1 : 1;
+
+      await db.query(
+        'UPDATE users SET current_streak = $1, updated_at = NOW() WHERE id = $2',
+        [streak, user.id]
+      );
+
+      if (streak >= 2) {
+        streakMsg = `\n\n🔥 Você está há *${streak} dias* seguidos treinando!`;
+      }
+    }
+
+    await messageSender.sendText(user.phone, FEEDBACK_REPLY[feedback] + streakMsg);
   }
 }
 
