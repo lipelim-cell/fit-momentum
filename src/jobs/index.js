@@ -1,6 +1,6 @@
 const cron = require('node-cron');
 const db = require('../config/database');
-const workoutGenerator = require('../services/ai/workoutGenerator');
+const workoutAgent = require('../agents/workout');
 const messageSender = require('../services/whatsapp/messageSender');
 const logger = require('../utils/logger');
 
@@ -44,17 +44,9 @@ async function sendDailyWorkouts() {
 
     for (const user of result.rows) {
       try {
-        const workout = await workoutGenerator.generatePersonalizedWorkout(user);
-        await messageSender.sendWorkout(user.phone, workout);
-
-        await db.query(
-          `INSERT INTO workouts (user_id, data, titulo, exercicios, duracao_estimada, calorias_estimadas)
-           VALUES ($1, CURRENT_DATE, $2, $3, $4, $5)
-           ON CONFLICT (user_id, data) DO NOTHING`,
-          [user.id, workout.titulo, JSON.stringify(workout), workout.duracao_estimada, workout.calorias_estimadas]
-        );
+        await workoutAgent.sendTodaysWorkout(user);
       } catch (err) {
-        logger.error(`Erro ao enviar treino para ${user.phone}:`, err.message);
+        logger.error(`[Jobs] Erro ao enviar treino para ${user.phone}:`, err.message);
       }
     }
 

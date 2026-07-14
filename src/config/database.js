@@ -2,12 +2,12 @@ const { Pool } = require('pg');
 const logger = require('../utils/logger');
 
 // Configuração do pool de conexões PostgreSQL
+const sslConfig = process.env.DATABASE_URL?.includes('localhost') ? false : { rejectUnauthorized: false };
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? {
-    rejectUnauthorized: false
-  } : false,
-  max: 20, // Máximo de conexões no pool
+  ssl: sslConfig,
+  max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
 });
@@ -19,17 +19,21 @@ pool.on('connect', () => {
 
 pool.on('error', (err) => {
   logger.error('Erro inesperado no pool PostgreSQL:', err);
-  process.exit(-1);
 });
 
-// Testar conexão na inicialização
-pool.query('SELECT NOW()', (err, res) => {
-  if (err) {
-    logger.error('❌ Erro ao conectar no PostgreSQL:', err);
-  } else {
-    logger.info('✅ PostgreSQL conectado:', res.rows[0].now);
-  }
-});
+// Testar conexão na inicialização (não bloqueia a aplicação)
+if (process.env.NODE_ENV !== 'test') {
+  setTimeout(() => {
+    pool.query('SELECT NOW()', (err, res) => {
+      if (err) {
+        logger.warn('⚠️ Aviso: Não foi possível conectar no PostgreSQL ainda:', err.message);
+        logger.info('💡 Dica: O app vai rodar sem banco em desenvolvimento. Tente depois.');
+      } else {
+        logger.info('✅ PostgreSQL conectado:', res.rows[0].now);
+      }
+    });
+  }, 1000);
+}
 
 // Helper para executar queries
 const query = async (text, params) => {

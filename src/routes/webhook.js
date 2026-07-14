@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const messageHandler = require('../services/whatsapp/messageHandler');
+const orchestrator = require('../agents/orchestrator');
 const logger = require('../utils/logger');
 
 // Verificação do webhook (Meta exige isso na configuração)
@@ -23,7 +23,10 @@ router.post('/whatsapp', async (req, res) => {
   try {
     const body = req.body;
 
+    logger.info('Webhook body: ' + JSON.stringify(body));
+
     if (body.object !== 'whatsapp_business_account') {
+      logger.warn('object inesperado: ' + body.object);
       return res.sendStatus(404);
     }
 
@@ -56,7 +59,7 @@ router.post('/whatsapp', async (req, res) => {
             continue;
           }
 
-          await messageHandler.handleIncomingMessage(phoneNumber, content, messageType);
+          await orchestrator.handle(phoneNumber, content, messageType);
         }
       }
     }

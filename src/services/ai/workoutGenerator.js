@@ -5,27 +5,30 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY
 });
 
+const SYSTEM_PROMPT = `Você é um Personal Trainer experiente e certificado do sistema FIT MOMENTUM.
+Seu papel é criar treinos completos, seguros e personalizados com base no perfil do aluno.
+Sempre responda APENAS com JSON válido, sem markdown, sem texto adicional antes ou depois.`;
+
 class WorkoutGenerator {
-  
-  /**
-   * Gera um treino personalizado usando Claude AI
-   * @param {Object} userProfile - Perfil do usuário
-   * @returns {Promise<Object>} Treino gerado
-   */
+
   async generatePersonalizedWorkout(userProfile) {
     try {
-      logger.info(`Gerando treino para usuário ${userProfile.id}`);
-      
-      const prompt = this.buildPrompt(userProfile);
-      
+      logger.info(`[WorkoutGenerator] Gerando treino para user ${userProfile.id}`);
+
       const message = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 3000,
-        temperature: 0.7,
+        system: [
+          {
+            type: 'text',
+            text: SYSTEM_PROMPT,
+            cache_control: { type: 'ephemeral' },
+          }
+        ],
         messages: [{
           role: 'user',
-          content: prompt
-        }]
+          content: this.buildPrompt(userProfile),
+        }],
       });
       
       const responseText = message.content[0].text;
@@ -39,12 +42,11 @@ class WorkoutGenerator {
       
       const workoutData = JSON.parse(cleanedText);
       
-      logger.info(`✅ Treino gerado com sucesso: ${workoutData.titulo}`);
-      
+      logger.info(`[WorkoutGenerator] Treino gerado: ${workoutData.titulo}`);
       return workoutData;
-      
+
     } catch (error) {
-      logger.error('❌ Erro ao gerar treino:', error);
+      logger.error('[WorkoutGenerator] Erro ao gerar treino:', error);
       
       // Fallback: retornar treino básico em caso de erro
       return this.getFallbackWorkout(userProfile);
@@ -55,17 +57,25 @@ class WorkoutGenerator {
    * Constrói o prompt para Claude
    */
   buildPrompt(userProfile) {
-    const intensityMultiplier = userProfile.intensityLevel || 1.0;
-    
-    return `Você é um Personal Trainer experiente do sistema FIT MOMENTUM.
+    const intensityMultiplier = parseFloat(userProfile.intensity_level) || 1.0;
 
-PERFIL DO ALUNO:
+    const localTreino = userProfile.local_treino || 'academia';
+    if (!userProfile.local_treino) {
+      logger.warn(`[WorkoutGenerator] Perfil incompleto (local_treino ausente) para user ${userProfile.id}`);
+    }
+
+    const diasSemana = userProfile.dias_semana || 3;
+    if (!userProfile.dias_semana) {
+      logger.warn(`[WorkoutGenerator] Perfil incompleto (dias_semana ausente) para user ${userProfile.id}`);
+    }
+
+    return `PERFIL DO ALUNO:
 - ID: ${userProfile.id}
 - Nome: ${userProfile.nome}
 - Objetivo: ${userProfile.objetivo}
 - Nível: ${userProfile.nivel}
-- Local de treino: ${userProfile.local}
-- Frequência: ${userProfile.diasSemana}x por semana
+- Local de treino: ${localTreino}
+- Frequência: ${diasSemana}x por semana
 - Restrições/Lesões: ${userProfile.restricoes || 'Nenhuma'}
 - Nível de intensidade: ${intensityMultiplier.toFixed(2)} (1.0 = padrão)
 
@@ -74,7 +84,7 @@ INSTRUÇÕES IMPORTANTES:
 2. Escolha 5-7 exercícios adequados ao perfil
 3. Seja ESPECÍFICO nas séries, repetições e tempos de descanso
 4. Inclua aquecimento e alongamento
-5. Adapte a intensidade ao nível atual (${intensityMultiplier.toFixed(2)})
+5. Adapte a intensidade ao nível atual (${intensityMultiplier.toFixed(2)}): abaixo de 1.0 reduza séries/carga sugerida e aumente o descanso; acima de 1.0 aumente séries/repetições e reduza o descanso
 6. Para "video_search_term", use termos em português que funcionem no YouTube
 
 REGRAS DE VOLUME POR NÍVEL:
