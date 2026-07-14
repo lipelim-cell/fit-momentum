@@ -1,6 +1,7 @@
 const db = require('../config/database');
 const messageSender = require('../services/whatsapp/messageSender');
 const logger = require('../utils/logger');
+const maskPhone = require('../utils/maskPhone');
 
 const ONBOARDING_STATES = new Set([
   'new', 'awaiting_name', 'awaiting_objective',
@@ -10,7 +11,8 @@ const ONBOARDING_STATES = new Set([
 class OrchestratorAgent {
   async handle(phoneNumber, message, messageType = 'text') {
     try {
-      logger.info(`📨 [Orchestrator] de ${phoneNumber}: ${message}`);
+      logger.info(`📨 [Orchestrator] de ${maskPhone(phoneNumber)} tipo=${messageType}`);
+      logger.debug(`[Orchestrator] conteúdo completo de ${phoneNumber}: ${message}`);
 
       const user = await this._findOrCreateUser(phoneNumber);
       await this._touchUser(user.id);
@@ -97,7 +99,7 @@ class OrchestratorAgent {
       "INSERT INTO users (phone, conversation_state, created_at) VALUES ($1, 'new', NOW()) RETURNING *",
       [phone]
     );
-    logger.info(`👤 Novo usuário criado: ${phone}`);
+    logger.info(`👤 Novo usuário criado: ${maskPhone(phone)}`);
     return created.rows[0];
   }
 

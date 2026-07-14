@@ -16,9 +16,9 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: true }));
 
-// Logging
+// Logging (sem query string — pode conter tokens, ex.: verify_token do webhook)
 app.use((req, res, next) => {
-  logger.info(`${req.method} ${req.url}`);
+  logger.info(`${req.method} ${req.path}`);
   next();
 });
 

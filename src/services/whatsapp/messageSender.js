@@ -1,5 +1,6 @@
 const axios = require('axios');
 const logger = require('../../utils/logger');
+const maskPhone = require('../../utils/maskPhone');
 
 const DELAY_MS = parseInt(process.env.MESSAGE_DELAY_MS) || 2000;
 
@@ -12,7 +13,8 @@ class MessageSender {
 
   async _send(payload) {
     if (!this.phoneNumberId || !this.accessToken) {
-      logger.warn('WhatsApp não configurado — mensagem ignorada:', JSON.stringify(payload));
+      logger.warn(`WhatsApp não configurado — mensagem ignorada (tipo=${payload.type}, para=${maskPhone(payload.to)})`);
+      logger.debug('Payload completo da mensagem ignorada:', JSON.stringify(payload));
       return;
     }
 
@@ -22,11 +24,11 @@ class MessageSender {
         payload,
         { headers: { Authorization: `Bearer ${this.accessToken}`, 'Content-Type': 'application/json' } }
       );
-      logger.info(`✅ Mensagem enviada para ${payload.to}`);
+      logger.info(`✅ Mensagem enviada para ${maskPhone(payload.to)}`);
       return response.data;
     } catch (error) {
       const msg = error.response?.data?.error?.message || error.message;
-      logger.error(`❌ Erro ao enviar mensagem para ${payload.to}: ${msg}`);
+      logger.error(`❌ Erro ao enviar mensagem para ${maskPhone(payload.to)}: ${msg}`);
       throw error;
     }
   }
